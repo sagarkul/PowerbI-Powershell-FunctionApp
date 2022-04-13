@@ -3,5 +3,5 @@
 #
 @{
     # For latest supported version, go to 'https://www.powershellgallery.com/packages/Az'.
-    'PowerBIPS'       = '2.*' 
+    'PowerBIPS' = '2.0.1.5' 
 }

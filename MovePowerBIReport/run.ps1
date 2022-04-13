@@ -4,8 +4,7 @@ using namespace System.Net
 param($Request, $TriggerMetadata)
 
 # Write to the Azure Functions log stream.
-Write-Host "PowerShell HTTP trigger function processed a request."
-$exception = "";
+Write-Host "Move PowerBI Report function processed a request."
 try {
     # Interact with query parameters or the body of the request.
     $source_group_id = $Request.Query.sourceGroupId
@@ -35,10 +34,12 @@ try {
     # if ($name) {
     #     $body = "Hello, $name. This HTTP triggered function executed successfully."
     # }
-
+    
     if (-not (Get-Module PowerBIPS)) {
         "Import-Module PowerBIPS -UseWindowsPowerShell"
         Import-Module PowerBIPS -UseWindowsPowerShell
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        #[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls, [Net.SecurityProtocolType]::Tls11, [Net.SecurityProtocolType]::Tls12, [Net.SecurityProtocolType]::Ssl3
     }
 
     # Authenticate with service principal
@@ -46,33 +47,43 @@ try {
     $clientSecret = "dLB7Q~w67nLe9v.v3m0gBIn4jSl~2BZ2zrD7r"
     $tenant = "8f102725-4bbc-4a0f-ba03-1a0e913cd18e"
 
+    #PowerShell – The underlying connection was closed: An unexpected error occurred on a send.
+    #https://blog.darrenjrobinson.com/powershell-the-underlying-connection-was-closed-an-unexpected-error-occurred-on-a-send/
     $authToken = Get-PBIAuthToken -clientId $clientId -clientSecret $clientSecret -tenantId $tenant -Verbose
     
+    "authToken: $authToken"
+
     if (-not ($authToken)) {
         throw "Unable to create authToken for client: $clientId"
     }
 
     # get source workspace
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls -bor
+    [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls12
     $source_group = Get-PBIGroup -authToken $authToken -id $source_group_id
     if (-not ($source_group)) {
-        throw "No group with given id: $source_group_id found"
+        throw "No source group with given id: $source_group_id found."
     }
 
     # Get report object
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls -bor
+    [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls12
     $source_report = Get-PBIReport -authToken $authToken -id $source_report_id -groupId $source_group_id
     if (-not ($source_report)) {
-        throw "No report with given id: $source_report_id"
+        throw "No source report with given id: $source_report_id found"
     }
     
     # Get target workspace
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls -bor
+    [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls12
     $target_group = Get-PBIGroup -authToken $authToken -name $target_group_name
     if (-not ($target_group)) {
-        throw "No target group with given name : $target_group_name found"
+        throw "No target group with given name : $target_group_name found."
     }
 
     $target_group_id = $($target_group.id)
     
-    $target_report = Get-PBIReport -authToken $authToken -name "$($source_report.name)" -groupId $target_group_id
+    $target_report = Get-PBIReport -authToken $authToken -name "$($source_report.name)" -groupId $target_group_id 
     
     "target_report: $target_report"
     if ($target_report) {
@@ -95,14 +106,12 @@ try {
     $body = $target_report
 }
 catch { 
-    $exception = $_.Exception
     Write-Host "An error occurred:"
     Write-Host $_.Exception
     Write-Host $_.ScriptStackTrace
 }
 finally {
-    if ($Error -Or $exception) {
-        "exception $exception"
+    if ($Error) {
         # Associate values to output bindings by calling 'Push-OutputBinding'.
         Push-OutputBinding -Name Response -Value ([HttpResponseContext]@{
                 StatusCode = [HttpStatusCode]::BadRequest
